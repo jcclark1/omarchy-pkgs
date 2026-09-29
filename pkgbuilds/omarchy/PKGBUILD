@@ -9,7 +9,11 @@
 #  - _commit is the single source of truth for what gets built. _tag is
 #    provenance only (empty when cut from a bare commit). omarchy and
 #    omarchy-settings must always carry identical _tag/_commit/pkgver/sha256sums.
-pkgname='omarchy'
+pkgbase='omarchy'
+# Split: omarchy-server is the same payload for the headless server profile,
+# without the desktop dependencies. Built from the same _commit so the two
+# can never skew.
+pkgname=('omarchy' 'omarchy-server')
 _tag='v4.0.4'
 _commit='c668141e9c42b13c80c9ca4ea108e11708c5e8a5'
 pkgver=4.0.4
@@ -22,52 +26,16 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/basecamp/omarchy'
 license=('MIT')
 conflicts=('omarchy-dev')
-# Hard depends: only packages whose removal would brick the desktop. The ISO
-# pacstraps the full default install set from install/omarchy-base.packages.
-depends=(
-  # Omarchy meta
-  'omarchy-keyring'
-  # Exact-version pin: omarchy-settings-dev `provides=omarchy-settings`
-  # (unversioned), and an unversioned dependency here would let the dev
-  # package satisfy it, leaving a mixed dev/stable install. A versioned
-  # dependency can only be satisfied by the real omarchy-settings built
-  # from the same _commit, and forces the pair to upgrade together.
-  "omarchy-settings=${pkgver}"
 
-  # Wayland / Hyprland core
-  'hyprland'
-  'quickshell'
-  'uwsm'
-  'sddm'
-  'xdg-desktop-portal-hyprland'
-
-  # Audio / auth / portal essentials
-  'wireplumber'
-  'pipewire'
-  'gnome-keyring'
-
-  # Required by omarchy-* scripts and omarchy-shell
-  'gum'
-  'jq'
-  'git'
-  'perl' # /usr/bin/omarchy-shell invokes perl directly
-
-  # Update availability checks (checkupdates from pacman-contrib uses fakeroot)
-  'fakeroot'
-  'pacman-contrib'
-
-  # System font (UI assumes it)
-  'ttf-jetbrains-mono-nerd-basic'
-)
-
-# Bootloader stack. Lives here rather than on omarchy-settings because
+# Bootloader stack, shared by both split packages (each package function sets
+# its own depends, which would otherwise drop a global depends_x86_64). Lives here rather than on omarchy-settings because
 # omarchy-settings is also installed into the live ISO env (for plymouth
 # / /etc/skel seeding), where the limine-mkinitcpio-hook would fail with
 # 'Cannot detect an ESP path' inside the chroot. The omarchy-settings
 # config drop-ins under /etc/mkinitcpio.conf.d/, /etc/limine-entry-tool.d/,
 # and /etc/snapper/config-templates/ only do anything when these are
 # installed alongside.
-depends_x86_64=(
+_depends_x86_64=(
   'limine'
   'limine-mkinitcpio-hook'
   'limine-snapper-sync'
@@ -78,7 +46,7 @@ depends_x86_64=(
 # Arch Linux ARM's kernel and boot layout, so the Limine/Snapper stack does not
 # apply. Wi-Fi on the Broadcom parts only scans reliably through the iwd
 # backend, which install/hardware/network.sh selects on Apple Silicon.
-depends_aarch64=(
+_depends_aarch64=(
   'iwd'
   'networkmanager'
 )
@@ -105,7 +73,7 @@ prepare() {
   fi
 }
 
-package() {
+_package_payload() {
   cd "$srcdir/omarchy"
 
   # Runtime binaries — ship everything in bin/ except the debug helpers
@@ -159,4 +127,69 @@ package() {
 
   # Runtime version file.
   install -Dm644 version "$pkgdir/usr/share/omarchy/version"
+}
+
+# Hard depends: only packages whose removal would brick the install. The ISO
+# pacstraps the full default install set from install/omarchy-base.packages
+# (install/omarchy-server.packages for the server profile).
+package_omarchy() {
+  depends=(
+    # Omarchy meta
+    'omarchy-keyring'
+    "omarchy-settings=${pkgver}"
+
+    # Required by omarchy-* scripts
+    'gum'
+    'jq'
+    'git'
+    'perl' # /usr/bin/omarchy-shell invokes perl directly
+
+    # Update availability checks (checkupdates from pacman-contrib uses fakeroot)
+    'fakeroot'
+    'pacman-contrib'
+
+    # Wayland / Hyprland core
+    'hyprland'
+    'quickshell'
+    'uwsm'
+    'sddm'
+    'xdg-desktop-portal-hyprland'
+
+    # Audio / auth / portal essentials
+    'wireplumber'
+    'pipewire'
+    'gnome-keyring'
+
+    # System font (UI assumes it)
+    'ttf-jetbrains-mono-nerd-basic'
+  )
+  depends_x86_64=("${_depends_x86_64[@]}")
+  depends_aarch64=("${_depends_aarch64[@]}")
+
+  _package_payload
+}
+
+package_omarchy-server() {
+  pkgdesc='Beautiful, modern, and opinionated Arch Linux by DHH (headless server)'
+  provides=('omarchy')
+  conflicts=('omarchy')
+  depends=(
+    # Omarchy meta
+    'omarchy-keyring'
+    "omarchy-settings=${pkgver}"
+
+    # Required by omarchy-* scripts
+    'gum'
+    'jq'
+    'git'
+    'perl' # /usr/bin/omarchy-shell invokes perl directly
+
+    # Update availability checks (checkupdates from pacman-contrib uses fakeroot)
+    'fakeroot'
+    'pacman-contrib'
+  )
+  depends_x86_64=("${_depends_x86_64[@]}")
+  depends_aarch64=("${_depends_aarch64[@]}")
+
+  _package_payload
 }
