@@ -164,6 +164,16 @@ package_omarchy-dev() {
   _package_payload
 }
 
+# A server never applies a theme or runs the desktop shell (theme and lock
+# screen setup are desktop-only in the install scripts), so its payload drops
+# the ~66 MB of theme images and the Quickshell tree. The text theme files
+# stay, so omarchy-theme-set still works when run by hand.
+_strip_server_payload() {
+  find "$pkgdir/usr/share/omarchy/themes" -type f \
+    \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.webp' -o -iname '*.gif' \) -delete
+  rm -rf "$pkgdir/usr/share/omarchy/shell"
+}
+
 package_omarchy-server-dev() {
   pkgdesc='Beautiful, modern, and opinionated Arch Linux by DHH (headless server, quattro branch tip)'
   provides=('omarchy')
@@ -187,4 +197,5 @@ package_omarchy-server-dev() {
   depends_aarch64=("${_depends_aarch64[@]}")
 
   _package_payload
+  _strip_server_payload
 }
